@@ -1,39 +1,44 @@
 # Use a pipeline as a high-level helper
 import torch
 from transformers import pipeline
-from multiprocessing import Process
+from threading import Thread
 import time
 import pynvml
 import psutil
 
 
-def log_memory():
-    pynvml.nvmlInit()
-    h = pynvml.nvmlDeviceGetHandleByIndex(0)
-    for i in range(1000):
-        info = pynvml.nvmlDeviceGetMemoryInfo(h)
-        #print(f'total    : {round(info.total / 1024.0 / 1024.0 / 1024.0, 2):.2f}')
-        #print(f'free     : {round(info.free / 1024.0 / 1024.0 / 1024.0, 2)}')
-        print(f'GPU VMEM Used  : {round(info.used / 1024.0 / 1024.0 / 1024.0, 2):.2f}')
-        print(f'System RAM     : {round(psutil.virtual_memory().used / 1024.0 / 1024.0 / 1024.0, 2):.2f}')
-        time.sleep(2)
+class ResourceLogger(Thread):
+    def __init__(self):
+        super().__init__()
+        self.terminate = False
+
+    def run(self):
+        pynvml.nvmlInit()
+        h = pynvml.nvmlDeviceGetHandleByIndex(0)
+        while not self.terminate:
+            info = pynvml.nvmlDeviceGetMemoryInfo(h)
+            gpu_mem_used = round(info.used / 1024.0 / 1024.0 / 1024.0, 2)
+            gpu_mem_total = round(info.total / 1024.0 / 1024.0 / 1024.0, 2)
+            gpu_mem_p = round(gpu_mem_used / gpu_mem_total, 2)
+            sys_mem_used = round(psutil.virtual_memory().used / 1024.0 / 1024.0 / 1024.0, 2)
+            sys_mem_total = round(psutil.virtual_memory().total / 1024.0 / 1024.0 / 1024.0, 2)
+            sys_mem_p = round(sys_mem_used / sys_mem_total, 2)
+            print(f"GPU VMEM {gpu_mem_used:.2f} of {gpu_mem_total:.2f} ({gpu_mem_p * 100:.2f}%), "
+                  f"Sys RAM {sys_mem_used:.2f} of {sys_mem_total:.2f} ({sys_mem_p * 100:.2f}%)")
+            time.sleep(2)
+
+    def stop(self):
+        self.terminate = True
 
 
 def main():
-    # Load the model on CPU memory
-    # model = pipeline("text-generation", model="Open-Orca/Mistral-7B-OpenOrca", device="cpu").model
-    # Cast to half precision.
-    # model = pipeline("text-generation", model="Open-Orca/Mistral-7B-OpenOrca", device="cpu").model.half().half()
-    #model = pipeline("text-generation", model="Open-Orca/LlongOrca-7B-16k", device="cpu", torch_dtype=torch.float16).model
     model = pipeline("text-generation", model="Open-Orca/LlongOrca-7B-16k", device=0, torch_dtype=torch.float16).model
-    # Save locally.
-    # model.save_pretrained(r"D:\model_f16.mdl")
+    model.save_pretrained(r"D:\model_f16.mdl")
 
-    # pipe = pipeline("text-generation", model="Open-Orca/Mistral-7B-OpenOrca")
-    time.sleep(120)
-    a = 1
 
 if __name__ == "__main__":
-    p = Process(target=log_memory)
-    p.start()
+    resource_logger = ResourceLogger()
+    resource_logger.start()
     main()
+    resource_logger.stop()
+    a = 1
