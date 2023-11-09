@@ -12,11 +12,6 @@ from datetime import datetime
 
 import logging
 log_path = './my_log.log'
-
-import logging
-#logging.basicConfig(filemode='a',
-#                    level=logging.INFO)
-
 log_formatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s")
 logger = logging.getLogger("main")
 file_handler = logging.FileHandler(filename=log_path, mode='a')
